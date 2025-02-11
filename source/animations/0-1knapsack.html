@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>0-1背包问题求解动画演示</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    table {
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+    table, th, td {
+      border: 1px solid #888;
+      text-align: center;
+      padding: 5px 8px;
+    }
+    input {
+      width: 60px;
+    }
+    button {
+      margin: 5px;
+      padding: 5px 10px;
+    }
+    #controls {
+      margin-bottom: 20px;
+    }
+    #dpCanvas {
+      border: 1px solid #000;
+      background-color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <h1>0-1背包问题求解动画演示</h1>
+  <p>
+    题目描述：给定 n 个物品，每个物品具有重量和价值两个属性，以及一个背包容量 W。要求在不超过 W 的前提下，
+    选择部分物品，使得总价值最大。这里采用动态规划方法，通过表格推导的方式逐步填充 dp 数组。<br>
+    动态规划状态定义：dp[i][w] 表示前 i 个物品在背包容量为 w 时能获得的最大价值。<br>
+    状态转移方程：
+    <br>· 若 w < weight[i]，则 dp[i][w] = dp[i-1][w]；
+    <br>· 否则 dp[i][w] = max(dp[i-1][w], dp[i-1][w - weight[i]] + value[i])。
+  </p>
+
+  <div id="controls">
+    <div>
+      <label>背包容量 (W)：<input type="number" id="capacity" value="10" min="1"></label>
+    </div>
+    <div>
+      <!-- 修改 min 属性为 1 -->
+      <label>动画速度 (毫秒)：<input type="number" id="animationDelayInput" value="2000" min="1"></label>
+    </div>
+    <h2>物品列表 (重量, 价值)</h2>
+    <table id="itemsTable">
+      <tr>
+        <th>物品序号</th>
+        <th>重量</th>
+        <th>价值</th>
+        <th>操作</th>
+      </tr>
+      <tr>
+        <td>1</td>
+        <td><input type="number" value="2" class="weight" min="1"></td>
+        <td><input type="number" value="3" class="value" min="0"></td>
+        <td><button onclick="deleteRow(this)">删除</button></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><input type="number" value="3" class="weight" min="1"></td>
+        <td><input type="number" value="4" class="value" min="0"></td>
+        <td><button onclick="deleteRow(this)">删除</button></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><input type="number" value="4" class="weight" min="1"></td>
+        <td><input type="number" value="5" class="value" min="0"></td>
+        <td><button onclick="deleteRow(this)">删除</button></td>
+      </tr>
+    </table>
+    <button id="addItem">添加物品</button>
+    <button id="startAnimationButton">开始演示</button>
+  </div>
+
+  <canvas id="dpCanvas" width="800" height="600"></canvas>
+
+  <script>
+    // 删除物品行的函数
+    function deleteRow(btn) {
+      var row = btn.parentNode.parentNode;
+      row.parentNode.removeChild(row);
+      updateItemNumbers();
+    }
+
+    // 更新物品序号（第一列）的显示
+    function updateItemNumbers() {
+      var table = document.getElementById("itemsTable");
+      for (var i = 1; i < table.rows.length; i++) {
+        table.rows[i].cells[0].innerText = i;
+      }
+    }
+
+    // 添加物品行
+    document.getElementById("addItem").addEventListener("click", function() {
+      var table = document.getElementById("itemsTable");
+      var rowCount = table.rows.length;
+      var row = table.insertRow();
+      var cell1 = row.insertCell(0);
+      cell1.innerText = rowCount;
+      var cell2 = row.insertCell(1);
+      cell2.innerHTML = '<input type="number" value="1" class="weight" min="1">';
+      var cell3 = row.insertCell(2);
+      cell3.innerHTML = '<input type="number" value="1" class="value" min="0">';
+      var cell4 = row.insertCell(3);
+      cell4.innerHTML = '<button onclick="deleteRow(this)">删除</button>';
+    });
+
+    // 全局变量设置
+    var canvas = document.getElementById("dpCanvas");
+    var ctx = canvas.getContext("2d");
+
+    var dpTable = []; // 存储动态规划表格的二维数组
+    var items = [];   // 存储物品（每个物品包含 weight 和 value）
+    var capacity;     // 背包容量
+    var n;            // 物品数量
+
+    // 动画控制变量：当前正在计算的单元格 [currentRow][currentCol]
+    var currentRow = 0;
+    var currentCol = 0;
+
+    // 当前单元格详细解释（自然语言）
+    var explanationText = "";
+
+    // 全局定义表格绘制位置和单元格尺寸（用于绘图和点击事件中定位单元格）
+    var tableX = 50;
+    var tableY = 50;
+    var cellWidth = 50;
+    var cellHeight = 30;
+
+    // 修改 wrapText 函数支持 \n 换行
+    function wrapText(context, text, x, y, maxWidth, lineHeight) {
+      // 首先按换行符分割文本
+      var lines = text.split("\n");
+      for (var i = 0; i < lines.length; i++) {
+        var words = lines[i].split(' ');
+        var line = '';
+        for (var n = 0; n < words.length; n++) {
+          var testLine = line + words[n] + ' ';
+          var metrics = context.measureText(testLine);
+          if (metrics.width > maxWidth && n > 0) {
+            context.fillText(line, x, y);
+            line = words[n] + ' ';
+            y += lineHeight;
+          } else {
+            line = testLine;
+          }
+        }
+        context.fillText(line, x, y);
+        y += lineHeight;
+      }
+    }
+
+    // 绘制 dp 表格和说明
+    function drawTable() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 绘制动态规划 dp 表格（共 n+1 行，capacity+1 列）
+      for (var i = 0; i <= n; i++) {
+        for (var j = 0; j <= capacity; j++) {
+          var x = tableX + j * cellWidth;
+          var y = tableY + i * cellHeight;
+          ctx.strokeStyle = "#000";
+          ctx.strokeRect(x, y, cellWidth, cellHeight);
+
+          // 如果该单元格已有记录，则填写数字
+          if (dpTable[i] && dpTable[i][j] !== undefined) {
+            ctx.fillStyle = "#000";
+            ctx.font = "16px Arial";
+            ctx.fillText(dpTable[i][j], x + 15, y + 20);
+          }
+        }
+      }
+
+      // 高亮显示当前正在计算的单元格（如果动画正在进行中）
+      if (currentRow <= n) {
+        var highlightX = tableX + currentCol * cellWidth;
+        var highlightY = tableY + currentRow * cellHeight;
+        ctx.fillStyle = "rgba(255, 255, 0, 0.5)";
+        ctx.fillRect(highlightX, highlightY, cellWidth, cellHeight);
+        if (dpTable[currentRow] && dpTable[currentRow][currentCol] !== undefined) {
+          ctx.fillStyle = "#000";
+          ctx.fillText(dpTable[currentRow][currentCol], highlightX + 15, highlightY + 20);
+        }
+      }
+
+      // 绘制列标题（背包容量 0 ~ capacity）
+      ctx.fillStyle = "blue";
+      ctx.font = "16px Arial";
+      for (var j = 0; j <= capacity; j++) {
+        ctx.fillText(j, tableX + j * cellWidth + 15, tableY - 10);
+      }
+
+      // 绘制行标题：第 0 行标记为 "0"，后续行标记为 "物品i"
+      for (var i = 0; i <= n; i++) {
+        var label = (i === 0) ? "0" : ("物品" + i);
+        ctx.fillText(label, tableX - 50, tableY + i * cellHeight + 20);
+      }
+
+      // 绘制当前计算状态说明信息
+      var infoY = tableY + (n + 1) * cellHeight + 30;
+      ctx.fillStyle = "red";
+      if (currentRow <= n) {
+        ctx.fillText("当前计算单元格：dp[" + currentRow + "][" + currentCol + "]", tableX, infoY);
+      } else {
+        ctx.fillText("计算完成，最优解为 dp[" + n + "][" + capacity + "] = " + dpTable[n][capacity], tableX, infoY);
+      }
+
+      // 绘制详细解释说明文本
+      var explanationStartY = infoY + 30;
+      ctx.fillStyle = "black";
+      ctx.font = "16px Arial";
+      ctx.fillText("详细解释：", tableX, explanationStartY);
+      wrapText(ctx, explanationText, tableX, explanationStartY + 20, canvas.width - tableX - 50, 20);
+    }
+
+    // 动画函数：依次计算 dpTable 每个单元格，更新解释文本，并绘制表格
+    function animateDP() {
+      // 检查是否所有单元格都已计算完
+      if (currentRow > n) {
+        drawTable();
+        return;
+      }
+
+      // 当前单元格的解释信息
+      if (currentRow === 0) {
+        dpTable[0][currentCol] = 0;
+        explanationText = "第一行初始化：当没有物品可选时，背包内最大价值均为 0，所以 dp[0][" + currentCol + "] = 0.";
+      } else {
+        if (currentCol === 0) {
+          dpTable[currentRow][0] = 0;
+          explanationText = "第一列初始化：当背包容量为 0 时，无法放入任何物品，所以 dp[" + currentRow + "][0] = 0.";
+        } else {
+          var itemIndex = currentRow - 1; // 当前物品在 items 中的下标
+          var wt = items[itemIndex].weight;
+          var val = items[itemIndex].value;
+          if (currentCol < wt) {
+            dpTable[currentRow][currentCol] = dpTable[currentRow - 1][currentCol];
+            explanationText = "当前背包容量 " + currentCol + " 小于物品" + currentRow + "的重量 (" + wt + ")，故无法放入该物品，继承上一行：dp[" + currentRow + "][" + currentCol + "] = dp[" + (currentRow - 1) + "][" + currentCol + "] = " + dpTable[currentRow - 1][currentCol] + ".";
+          } else {
+            var candidate1 = dpTable[currentRow - 1][currentCol];
+            var candidate2 = dpTable[currentRow - 1][currentCol - wt] + val;
+            dpTable[currentRow][currentCol] = Math.max(candidate1, candidate2);
+            explanationText = "当前背包容量 " + currentCol + " 大于等于物品" + currentRow + "的重量 (" + wt + ")，有两种选择：\n" +
+              "① 不放入物品" + currentRow + "，则 dp[" + currentRow + "][" + currentCol + "] = dp[" + (currentRow - 1) + "][" + currentCol + "] = " + candidate1 + "；\n" +
+              "② 放入物品" + currentRow + "，则 dp[" + currentRow + "][" + currentCol + "] = dp[" + (currentRow - 1) + "][" + (currentCol - wt) + "] + " + val +
+              " = " + dpTable[currentRow - 1][currentCol - wt] + " + " + val + " = " + candidate2 + "；\n" +
+              "最终取两者最大值，得到 dp[" + currentRow + "][" + currentCol + "] = " + dpTable[currentRow][currentCol] + ".";
+          }
+        }
+      }
+
+      drawTable();
+
+      // 实时读取“动画速度”输入值；只检查输入是否为合法数字（>=1 毫秒）
+      var delayInput = parseInt(document.getElementById("animationDelayInput").value);
+      var currentDelay = (isNaN(delayInput) || delayInput < 1) ? 2000 : delayInput;
+
+      // 延时后移动到下一个单元格继续动画
+      setTimeout(function() {
+        currentCol++;
+        if (currentCol > capacity) {
+          currentCol = 0;
+          currentRow++;
+        }
+        animateDP();
+      }, currentDelay);
+    }
+
+    // 点击“开始演示”按钮时，读取用户输入，构造 dpTable，并启动动画
+    document.getElementById("startAnimationButton").addEventListener("click", function() {
+      // 获取背包容量
+      capacity = parseInt(document.getElementById("capacity").value);
+      if (isNaN(capacity) || capacity < 1) {
+        alert("请输入合法的背包容量！");
+        return;
+      }
+
+      // 获取物品数据：重量和价值
+      var weightInputs = document.getElementsByClassName("weight");
+      var valueInputs = document.getElementsByClassName("value");
+      items = [];
+      n = weightInputs.length;
+      if (n === 0) {
+        alert("请至少添加一个物品！");
+        return;
+      }
+      for (var i = 0; i < n; i++) {
+        var wt = parseInt(weightInputs[i].value);
+        var val = parseInt(valueInputs[i].value);
+        if (isNaN(wt) || isNaN(val) || wt < 1) {
+          alert("请检查物品的重量和价值是否输入正确！");
+          return;
+        }
+        items.push({ weight: wt, value: val });
+      }
+
+      // 初始化 dpTable（共 n+1 行，capacity+1 列）
+      dpTable = [];
+      for (var i = 0; i <= n; i++) {
+        dpTable[i] = new Array(capacity + 1);
+      }
+
+      // 重置动画控制变量，并启动动画
+      currentRow = 0;
+      currentCol = 0;
+      animateDP();
+    });
+
+    // 点击 canvas 单元格显示详细解释
+    canvas.addEventListener("click", function(e) {
+      var rect = canvas.getBoundingClientRect();
+      // 计算鼠标点击在 canvas 内的坐标
+      var x = e.clientX - rect.left;
+      var y = e.clientY - rect.top;
+      // 检查点击位置是否位于 dp 表格内
+      if (x >= tableX && y >= tableY) {
+        var col = Math.floor((x - tableX) / cellWidth);
+        var row = Math.floor((y - tableY) / cellHeight);
+        var explanation = "";
+        // 如果该单元格尚未计算，则给出提示
+        if (!dpTable[row] || dpTable[row][col] === undefined) {
+          explanation = "该单元格还未计算完毕，请等待动画进行完毕。";
+        } else {
+          if (row === 0) {
+            explanation = "第一行：没有物品可选，背包最大价值均为 0，所以 dp[0][" + col + "] = 0.";
+          } else if (col === 0) {
+            explanation = "第一列：背包容量为 0，无论多少物品也无法放入，所以 dp[" + row + "][0] = 0.";
+          } else {
+            var itemIndex = row - 1;
+            var wt = items[itemIndex].weight;
+            var val = items[itemIndex].value;
+            if (col < wt) {
+              explanation = "当前背包容量 " + col + " 小于物品" + row + "的重量 (" + wt + ")，因此无法放入该物品，继承上一行：" +
+                            "dp[" + row + "][" + col + "] = dp[" + (row - 1) + "][" + col + "] = " + dpTable[row - 1][col] + ".";
+            } else {
+              var candidate1 = dpTable[row - 1][col];
+              var candidate2 = dpTable[row - 1][col - wt] + val;
+              explanation = "当前背包容量 " + col + " 大于或等于物品" + row + "的重量 (" + wt + ")，有两种选择：\n" +
+                            "① 不放入物品" + row + "，则 dp[" + row + "][" + col + "] = dp[" + (row - 1) + "][" + col + "] = " + candidate1 + "；\n" +
+                            "② 放入物品" + row + "，则 dp[" + row + "][" + col + "] = dp[" + (row - 1) + "][" + (col - wt) + "] + " + val +
+                            " = " + dpTable[row - 1][col - wt] + " + " + val + " = " + candidate2 + "；\n" +
+                            "最终取两者最大值，得到 dp[" + row + "][" + col + "] = " + dpTable[row][col] + ".";
+            }
+          }
+        }
+        explanationText = explanation;
+        // 重新绘制表格更新详细解释文本
+        drawTable();
+      }
+    });
+  </script>
+</body>
+</html>
