@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KMP 算法动画模拟</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #controls {
+      margin-bottom: 20px;
+    }
+    input {
+      margin: 5px;
+      padding: 5px;
+      font-size: 16px;
+    }
+    button {
+      padding: 5px 10px;
+      font-size: 16px;
+      margin: 5px;
+      cursor: pointer;
+    }
+    canvas {
+      background: white;
+      border: 1px solid #ccc;
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>KMP 算法动画模拟</h1>
+  <div id="controls">
+    <label>文本串: <input type="text" id="textInput" value="ABABDABACDABABCABAB" /></label>
+    <br />
+    <label>模式串: <input type="text" id="patternInput" value="ABABCABAB" /></label>
+    <br />
+    <button id="startBtn">开始模拟</button>
+    <button id="resetBtn">重置模拟</button>
+  </div>
+  <canvas id="kmpCanvas" width="1200" height="300"></canvas>
+
+  <script>
+    // 全局变量设置
+    let textStr = "";
+    let patternStr = "";
+    let lps = [];
+    let i = 0, j = 0;
+    let lastComparison = "";
+    let message = "";
+    let simulationActive = false;
+    let stepDelay = 1000; // 每步 1000 毫秒动画延时
+    let simulationTimeout; // 用于存储 setTimeout 返回 ID
+
+    // 绘制盒子参数配置
+    const boxWidth = 40, boxHeight = 40, boxSpacing = 10;
+    // 文本串、模式串及 LPS 数组所在的行纵坐标
+    const textRowY = 50, patternRowY = 150, lpsRowY = 210;
+
+    let canvas, ctx;
+
+    // 返回字符串居中绘制时的起始 x 坐标
+    function getStartX(str) {
+      return (canvas.width - (str.length * (boxWidth + boxSpacing) - boxSpacing)) / 2;
+    }
+
+    // 在指定位置画一个带边框的矩形，并在中间绘制文本
+    function drawBox(x, y, width, height, fillColor, text) {
+      ctx.fillStyle = fillColor;
+      ctx.fillRect(x, y, width, height);
+      ctx.strokeStyle = "black";
+      ctx.strokeRect(x, y, width, height);
+      ctx.fillStyle = "black";
+      ctx.font = "20px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, x + width / 2, y + height / 2);
+    }
+
+    // 绘制整个动画场景：文本串、模式串、LPS 数组和提示信息
+    function drawCanvas() {
+      // 清空画布
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 绘制文本串（默认居中）
+      let textStartX = getStartX(textStr);
+      ctx.font = "18px Arial";
+      ctx.fillStyle = "black";
+      ctx.textAlign = "center";
+      ctx.fillText("文本串", canvas.width / 2, textRowY - 20);
+      for (let k = 0; k < textStr.length; k++) {
+        let x = textStartX + k * (boxWidth + boxSpacing);
+        let fill = "white";
+        // 若当前位置为当前比较位置，则改变背景色
+        if (k === i) {
+          if (lastComparison === "match")
+            fill = "lightgreen";
+          else if (lastComparison === "mismatch")
+            fill = "lightcoral";
+          else
+            fill = "yellow";
+        }
+        drawBox(x, textRowY, boxWidth, boxHeight, fill, textStr.charAt(k));
+      }
+
+      // 绘制模式串：总是调整，使得模式串中 j 位置的字符与文本串中 i 位置的字符对齐
+      let patternStartX;
+      if (i < textStr.length && j < patternStr.length) {
+        patternStartX = textStartX + i * (boxWidth + boxSpacing) - j * (boxWidth + boxSpacing);
+      } else {
+        patternStartX = getStartX(patternStr);
+      }
+      ctx.fillText("模式串", canvas.width / 2, patternRowY - 20);
+      for (let k = 0; k < patternStr.length; k++) {
+        let x = patternStartX + k * (boxWidth + boxSpacing);
+        let fill = "white";
+        if (k === j) {
+          if (lastComparison === "match")
+            fill = "lightgreen";
+          else if (lastComparison === "mismatch")
+            fill = "lightcoral";
+          else
+            fill = "yellow";
+        }
+        drawBox(x, patternRowY, boxWidth, boxHeight, fill, patternStr.charAt(k));
+      }
+
+      // 绘制 LPS 数组，相对于模式串整体右移一个盒子的距离
+      // 注意：LPS 数组本来和模式串一一对应，这里偏移后给人一种“下一步跳转”的直观效果
+      let lpsStartX = patternStartX + (boxWidth + boxSpacing);
+      ctx.fillText("LPS 数组", canvas.width / 2, lpsRowY - 20);
+      for (let k = 0; k < patternStr.length; k++) {
+        let x = lpsStartX + k * (boxWidth + boxSpacing);
+        drawBox(x, lpsRowY, boxWidth, boxHeight, "lightyellow", lps[k]);
+      }
+
+      // 在画布底部绘制当前提示信息
+      ctx.font = "20px Arial";
+      ctx.textAlign = "left";
+      ctx.fillStyle = "black";
+      ctx.fillText(message, 20, 280);
+    }
+
+    // 计算模式串的 LPS 数组（部分匹配表）
+    function computeLPS(pattern) {
+      let m = pattern.length;
+      let lps = new Array(m).fill(0);
+      let len = 0;
+      let i = 1;
+      while (i < m) {
+        if (pattern.charAt(i) === pattern.charAt(len)) {
+          len++;
+          lps[i] = len;
+          i++;
+        } else {
+          if (len !== 0) {
+            len = lps[len - 1];
+          } else {
+            lps[i] = 0;
+            i++;
+          }
+        }
+      }
+      return lps;
+    }
+
+    // 单步模拟 KMP 算法，每步显示一次比较与指针移动情况
+    function simulateStep() {
+      if (!simulationActive) return;
+
+      // 文本扫描完毕，匹配失败
+      if (i >= textStr.length) {
+        message = "未找到匹配！";
+        drawCanvas();
+        simulationActive = false;
+        return;
+      }
+
+      // 当前比较位置：文本串 i 与模式串 j
+      if (j < patternStr.length) {
+        if (textStr.charAt(i) === patternStr.charAt(j)) {
+          lastComparison = "match";
+          message = "匹配: " + textStr.charAt(i) + " == " + patternStr.charAt(j);
+          drawCanvas();
+          setTimeout(() => {
+            i++;
+            j++;
+            if (j === patternStr.length) {
+              message = "匹配成功！模式串起始位置: " + (i - j);
+              drawCanvas();
+              simulationActive = false;
+            } else {
+              simulationTimeout = setTimeout(simulateStep, stepDelay);
+            }
+          }, stepDelay);
+        } else {
+          lastComparison = "mismatch";
+          message = "不匹配: " + textStr.charAt(i) + " ≠ " + patternStr.charAt(j);
+          drawCanvas();
+          setTimeout(() => {
+            if (j !== 0) {
+              j = lps[j - 1];
+              message += " ，j 跳回到 " + j;
+            } else {
+              i++;
+              message += " ，移动 i 到 " + i;
+            }
+            simulationTimeout = setTimeout(simulateStep, stepDelay);
+          }, stepDelay);
+        }
+      }
+    }
+
+    // 开始模拟：初始化全局变量、计算 LPS 数组，并启动动画
+    function startSimulation() {
+      textStr = document.getElementById("textInput").value;
+      patternStr = document.getElementById("patternInput").value;
+      lps = computeLPS(patternStr);
+      i = 0;
+      j = 0;
+      lastComparison = "";
+      message = "开始模拟...";
+      simulationActive = true;
+      drawCanvas();
+      simulationTimeout = setTimeout(simulateStep, stepDelay);
+    }
+
+    // 重置模拟：清除计时器、重新读取输入并刷新画布显示
+    function resetSimulation() {
+      clearTimeout(simulationTimeout);
+      simulationActive = false;
+      message = "模拟已重置。";
+      i = 0;
+      j = 0;
+      lastComparison = "";
+      textStr = document.getElementById("textInput").value;
+      patternStr = document.getElementById("patternInput").value;
+      lps = computeLPS(patternStr);
+      drawCanvas();
+    }
+
+    // 页面加载完成后初始化 canvas 并绑定按钮事件
+    window.onload = function() {
+      canvas = document.getElementById("kmpCanvas");
+      ctx = canvas.getContext("2d");
+
+      document.getElementById("startBtn").addEventListener("click", startSimulation);
+      document.getElementById("resetBtn").addEventListener("click", resetSimulation);
+
+      // 初始显示
+      textStr = document.getElementById("textInput").value;
+      patternStr = document.getElementById("patternInput").value;
+      lps = computeLPS(patternStr);
+      drawCanvas();
+    };
+  </script>
+</body>
+</html>
