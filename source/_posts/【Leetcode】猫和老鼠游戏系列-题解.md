@@ -163,26 +163,26 @@ public:
 
 ## 猫和老鼠 II 题解
 
-和上题基本类似，只是老鼠和猫不一定只跳一格，且加了墙壁。把逆向走法处理好就没问题了：
+和上题基本类似，只是老鼠和猫不一定只跳一格，且加了墙壁。把逆向走法处理好就没问题了。
+
+直接用上题代码修改。不过要注意几个容易遗漏的点：
+1. 猫可以走0这个位置，要记得修改；
+2. 返回值要修改。
 
 ```cpp
 class Solution {
 public:
-    // 定义状态中走棋方
-    static const int MOUSE_TURN = 0, CAT_TURN = 1;
-    // 定义结果：0--未定/平局（在本题中平局算作猫胜），1--老鼠必胜，2--猫必胜
-    static const int DRAW = 0, MOUSE_WIN = 1, CAT_WIN = 2;
-
-    // 主函数
     bool canMouseWin(vector<string>& grid, int catJump, int mouseJump) {
         int n = grid.size(), m = grid[0].size();
         int total = n * m;
+        const int MOUSE_TURN = 0, CAT_TURN = 1;
+        const int DRAW = 0, MOUSE_WIN = 1, CAT_WIN = 2;
         // 用一维下标表示每个格子：位置 i 对应 (i/m, i%m)
         vector<bool> valid(total, false);         // 是否不为墙
         vector<char> cell(total, ' ');              // 存储每个格子字符
         int mouseStart = -1, catStart = -1, food = -1;
-        for (int i = 0; i < n; i++){
-            for (int j = 0; j < m; j++){
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < m; j++) {
                 int pos = i * m + j;
                 cell[pos] = grid[i][j];
                 if (grid[i][j] != '#') {
@@ -190,9 +190,11 @@ public:
                 }
                 if (grid[i][j] == 'M') {
                     mouseStart = pos;
-                } else if (grid[i][j] == 'C') {
+                }
+                else if (grid[i][j] == 'C') {
                     catStart = pos;
-                } else if (grid[i][j] == 'F') {
+                }
+                else if (grid[i][j] == 'F') {
                     food = pos;
                 }
             }
@@ -208,10 +210,10 @@ public:
             movesMouse[pos].push_back(pos);
             movesCat[pos].push_back(pos);
             // 四个方向
-            vector<pair<int,int>> directions = { {-1,0}, {1,0}, {0,-1}, {0,1} };
+            vector<pair<int, int>> directions = { {-1,0}, {1,0}, {0,-1}, {0,1} };
             // 老鼠走法（距离上限为 mouseJump）
-            for (auto &dir : directions) {
-                for (int jump = 1; jump <= mouseJump; jump++){
+            for (auto& dir : directions) {
+                for (int jump = 1; jump <= mouseJump; jump++) {
                     int nr = r + dir.first * jump, nc = c + dir.second * jump;
                     if (nr < 0 || nr >= n || nc < 0 || nc >= m) break;  // 越界
                     int np = nr * m + nc;
@@ -220,8 +222,8 @@ public:
                 }
             }
             // 猫走法（距离上限为 catJump）
-            for (auto &dir : directions) {
-                for (int jump = 1; jump <= catJump; jump++){
+            for (auto& dir : directions) {
+                for (int jump = 1; jump <= catJump; jump++) {
                     int nr = r + dir.first * jump, nc = c + dir.second * jump;
                     if (nr < 0 || nr >= n || nc < 0 || nc >= m) break;
                     int np = nr * m + nc;
@@ -234,7 +236,7 @@ public:
         // 对于老鼠：revMovesMouse[p] = 所有能够跳跃到 p 的起点（对 valid 的格子）
         // 对于猫：revMovesCat[p] = 所有能够跳跃到 p 的起点
         vector<vector<int>> revMovesMouse(total), revMovesCat(total);
-        for (int pos = 0; pos < total; pos++){
+        for (int pos = 0; pos < total; pos++) {
             if (!valid[pos]) continue;
             for (int nxt : movesMouse[pos]) {
                 revMovesMouse[nxt].push_back(pos);
@@ -243,10 +245,10 @@ public:
                 revMovesCat[nxt].push_back(pos);
             }
         }
-        
+
         // dp[mouse][cat][turn]：状态 (mousePos, catPos, turn) 的结果，初始为 0 (未定/平局)
         // 同时维护每个状态的度数：当前走棋方有几种合法走法
-        vector<vector<vector<int>>> color(total, vector<vector<int>>(total, vector<int>(2, DRAW)));
+        vector<vector<vector<int>>> dp(total, vector<vector<int>>(total, vector<int>(2, DRAW)));
         vector<vector<vector<int>>> degree(total, vector<vector<int>>(total, vector<int>(2, 0)));
 
         // 计算度数：注意状态 (mouse, cat, turn) 只有当两个位置都是 valid 时才考虑
@@ -260,89 +262,78 @@ public:
                 degree[i][j][CAT_TURN] = movesCat[j].size();
             }
         }
-        
+
         // 初始化队列，将所有“终局状态”入队
         // 终局状态：
         // 1. 如果老鼠已经在食物处，则老鼠获胜
         // 2. 如果猫在食物处，则猫获胜（猫先到达食物）
         // 3. 如果猫与老鼠在同一位置，则猫获胜
-        queue<tuple<int,int,int>> q;
-        for (int i = 0; i < total; i++){
+        deque<tuple<int, int, int, int>> q;
+        for (int i = 0; i < total; i++) {
             if (!valid[i]) continue;
-            for (int j = 0; j < total; j++){
+            for (int j = 0; j < total; j++) {
                 if (!valid[j]) continue;
-                for (int turn = 0; turn < 2; turn++){
+                for (int turn = 0; turn < 2; turn++) {
                     if (i == food) {
-                        color[i][j][turn] = MOUSE_WIN;
-                        q.emplace(i, j, turn);
-                    } else if (j == food) {
+                        dp[i][j][turn] = MOUSE_WIN;
+                        q.emplace_back(i, j, turn, MOUSE_WIN);
+                    }
+                    else if (j == food) {
                         // 如果猫到达食物，不论走棋顺序结果均为猫赢
-                        color[i][j][turn] = CAT_WIN;
-                        q.emplace(i, j, turn);
-                    } else if (i == j) {
+                        dp[i][j][turn] = CAT_WIN;
+                        q.emplace_back(i, j, turn, CAT_WIN);
+                    }
+                    else if (i == j) {
                         // 猫与老鼠重合，猫赢
-                        color[i][j][turn] = CAT_WIN;
-                        q.emplace(i, j, turn);
+                        dp[i][j][turn] = CAT_WIN;
+                        q.emplace_back(i, j, turn, CAT_WIN);
                     }
                 }
             }
         }
-        
-        // 反向拓扑排序（逆向动态规划）：不断从定局状态反推出可以转移到这些状态的上一步状态
+
         while (!q.empty()) {
-            auto [mousePos, catPos, turn] = q.front();
-            q.pop();
-            int outcome = color[mousePos][catPos][turn];
-            // 上一步走棋方，与当前状态走棋方相反
-            int prevTurn = (turn == MOUSE_TURN ? CAT_TURN : MOUSE_TURN);
-            // 根据当前状态，求上一步可能达到此局面的所有状态
-            if (turn == MOUSE_TURN) {
-                // 当前状态是老鼠走，因此上一步的走法是猫走：
-                // 上一步状态形如 (mousePos, prevCat, CAT_TURN) 且要求：prevCat 的走法中能跳到 catPos
-                for (int prevCat : revMovesCat[catPos]) {
-                    // 前驱状态的 mousePos 保持不变
-                    if (!valid[mousePos] || !valid[prevCat]) continue;
-                    if (color[mousePos][prevCat][prevTurn] != DRAW) continue;
-                    // 如果上一状态（猫走）的玩家就是猫，本状态若结果为猫赢，
-                    // 则猫可以直接选这一步达到必胜状态
-                    if (prevTurn == CAT_TURN && outcome == CAT_WIN) {
-                        color[mousePos][prevCat][prevTurn] = CAT_WIN;
-                        q.emplace(mousePos, prevCat, prevTurn);
-                    } else {
-                        // 否则，对应状态的出度减1
-                        degree[mousePos][prevCat][prevTurn]--;
-                        // 如果当前状态的所有走法都不能帮助该玩家取胜，
-                        // 则该状态必定对当前走棋方不利，
-                        // 即对于猫走状态，若所有走法都不能获得猫必胜，则上一状态结果为老鼠胜
-                        if (degree[mousePos][prevCat][prevTurn] == 0) {
-                            color[mousePos][prevCat][prevTurn] = (prevTurn == CAT_TURN ? MOUSE_WIN : CAT_WIN);
-                            q.emplace(mousePos, prevCat, prevTurn);
+            auto [m, c, t, result] = q.front();
+            q.pop_front();
+
+            int prevTurn = 1 - t;
+            if (prevTurn == 0) {
+                for (int prevMouse : revMovesMouse[m]) {
+                    if (dp[prevMouse][c][0] != DRAW) continue;
+                    if (result == MOUSE_WIN) {
+                        dp[prevMouse][c][0] = MOUSE_WIN;
+                        q.emplace_back(prevMouse, c, 0, MOUSE_WIN);
+                    }
+                    else {
+                        degree[prevMouse][c][0]--;
+                        if (degree[prevMouse][c][0] == 0) {
+                            dp[prevMouse][c][0] = CAT_WIN;
+                            q.emplace_back(prevMouse, c, 0, CAT_WIN);
                         }
                     }
                 }
-            } else {  // turn == CAT_TURN
-                // 当前状态由猫走，因此上一步走棋方为老鼠，上一步状态形如 (prevMouse, catPos, MOUSE_TURN)
-                // 并要求：prevMouse 的走法中能跳到 mousePos
-                for (int prevMouse : revMovesMouse[mousePos]) {
-                    if (!valid[prevMouse] || !valid[catPos]) continue;
-                    if (color[prevMouse][catPos][prevTurn] != DRAW) continue;
-                    if (prevTurn == MOUSE_TURN && outcome == MOUSE_WIN) {
-                        color[prevMouse][catPos][prevTurn] = MOUSE_WIN;
-                        q.emplace(prevMouse, catPos, prevTurn);
-                    } else {
-                        degree[prevMouse][catPos][prevTurn]--;
-                        if (degree[prevMouse][catPos][prevTurn] == 0) {
-                            color[prevMouse][catPos][prevTurn] = (prevTurn == MOUSE_TURN ? CAT_WIN : MOUSE_WIN);
-                            q.emplace(prevMouse, catPos, prevTurn);
+            }
+            else {
+                for (int prevCat : revMovesCat[c]) {
+                    if (dp[m][prevCat][1] != DRAW) continue;
+                    if (result == CAT_WIN) {
+                        dp[m][prevCat][1] = CAT_WIN;
+                        q.emplace_back(m, prevCat, 1, CAT_WIN);
+                    }
+                    else {
+                        degree[m][prevCat][1]--;
+                        if (degree[m][prevCat][1] == 0) {
+                            dp[m][prevCat][1] = MOUSE_WIN;
+                            q.emplace_back(m, prevCat, 1, MOUSE_WIN);
                         }
                     }
                 }
             }
         }
-        
-        // 最后初始状态为 (mouseStart, catStart, MOUSE_TURN)
-        // 注意：若经过传播后该状态仍未定，则属于循环（平局）情况——根据题意猫获胜
-        return color[mouseStart][catStart][MOUSE_TURN] == MOUSE_WIN;
+
+        return dp[mouseStart][catStart][MOUSE_TURN] == MOUSE_WIN;
     }
 };
 ```
+
+战果：87ms，击败100.00%的人！
