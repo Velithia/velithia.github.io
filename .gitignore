@@ -1,0 +1,43 @@
+# IDE and Editor Folders
+.idea/
+.vscode/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Node.js Dependencies
+# The node_modules folder contains all of your project's dependencies.
+# It can be very large and should never be committed to Git.
+# It is recreated by running `npm install`.
+node_modules/
+
+# NPM Debug Logs
+# These files are created by npm in case of an error.
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# VitePress Build Output and Cache
+# Since we are using GitHub Actions for deployment, we don't need to track
+# the build output (dist) or the development server cache.
+.vitepress/dist/
+.vitepress/cache/
+
+# Environment Variables
+# Files that contain sensitive information like API keys or local configuration.
+# It's a best practice to never commit them.
+.env
+.env.local
+.env.*.local
+
+# Build artifacts and temporary files
+dist/
+dist-ssr/
+*.local
+
+# Lockfiles from different package managers
+# Keep the one you use (e.g., package-lock.json) and ignore others if needed.
+# pnpm-lock.yaml
+# yarn.lock
