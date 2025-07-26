@@ -4,7 +4,6 @@ export default defineConfig({
   title: "Velithia's Blog",
   description: "Velithia's Personal Blog",
   base: '/',
-  outDir: '../..',
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
